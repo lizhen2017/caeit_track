@@ -1,5 +1,6 @@
 from mmdet.apis import init_detector, inference_detector, show_result
 import mmcv
+from utils.viz.image import imshow_det_bboxes
 import numpy as np
 
 __all__ = ['MMDETDetector']
@@ -34,19 +35,18 @@ class MMDETDetector:
             ]
             class_ids = np.concatenate(class_ids)
             bboxes = np.vstack(result)
-
-        if self.score_thr > 0 and bboxes.shape[0] > 0:
-            assert bboxes.shape[1] == 5
-            scores = bboxes[:, -1]
-            inds = scores > self.score_thr
+        scores = bboxes[:, -1:]
+        bboxes =  bboxes[:, :-1]
+        if self.score_thr > 0:
+            inds = scores[:, 0] > self.score_thr
             bboxes = bboxes[inds, :]
             class_ids = class_ids[inds]
-        return bboxes, class_ids
+        return bboxes, scores, class_ids
 
     def __call__(self, img):
         result = inference_detector(self._model, img)
-        bboxes, class_ids = self.bbox_post_process(result)
-        return bboxes, class_ids
+        bboxes, scores, class_ids = self.bbox_post_process(result)
+        return bboxes, scores, class_ids
 
 if __name__ == '__main__':
     img_path = '../demo/coco/000000000872.jpg'
@@ -55,10 +55,11 @@ if __name__ == '__main__':
                              checkpoint_file='../configs/detector/checkpoints/hrnet/cascade_rcnn_hrnetv2p_w32_20e_20190522-55bec4ee.pth',
                              score_thr=0.3,
                              det_person=True)
-    bboxes, class_ids = detector(img_array)
-    mmcv.imshow_det_bboxes(
+    bboxes, scores, class_ids = detector(img_array)
+    imshow_det_bboxes(
         img_array,
         bboxes,
+        scores,
         class_ids,
         class_names=detector.CLASSES,
         score_thr=0,
