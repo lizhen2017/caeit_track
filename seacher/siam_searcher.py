@@ -80,7 +80,7 @@ if __name__ == '__main__':
         first_class_id = class_ids[0:1]
         searcher.reset(det_array, first_bbox)
         first_search_bbox, first_search_score = searcher.search(search_array)
-        print(first_search_bbox, first_search_score)
+        # print(first_search_bbox, first_search_score)
         imshow_det_bboxes(
             search_array,
             first_search_bbox,
