@@ -81,8 +81,8 @@ def imshow_det_bboxes(img,
                       labels,
                       class_names=None,
                       score_thr=0,
-                      bbox_color='green',
-                      text_color='green',
+                      bbox_colors='green',
+                      text_colors='green',
                       thickness=1,
                       font_scale=0.5,
                       show=True,
@@ -98,8 +98,8 @@ def imshow_det_bboxes(img,
         labels (ndarray): Labels of bboxes.
         class_names (list[str]): Names of each classes.
         score_thr (float): Minimum score of bboxes to be shown.
-        bbox_color (str or tuple or :obj:`Color`): Color of bbox lines.
-        text_color (str or tuple or :obj:`Color`): Color of texts.
+        bbox_colors (str or tuple or :obj:`Color`): Color of bbox lines.
+        text_colors (str or tuple or :obj:`Color`): Color of texts.
         thickness (int): Thickness of lines.
         font_scale (float): Font scales of texts.
         show (bool): Whether to show the image.
@@ -117,11 +117,12 @@ def imshow_det_bboxes(img,
         inds = scores[:, 0] > score_thr
         bboxes = bboxes[inds, :]
         labels = labels[inds]
+    if isinstance(bbox_colors, str):
+        bbox_colors = [color_val(bbox_colors)] * len(bboxes)
+    if isinstance(text_colors, str):
+        text_colors = [color_val(text_colors)] * len(bboxes)
 
-    bbox_color = color_val(bbox_color)
-    text_color = color_val(text_color)
-
-    for bbox, score, label in zip(bboxes, scores, labels):
+    for bbox, score, label, text_color, bbox_color in zip(bboxes, scores, labels, text_colors, bbox_colors):
         bbox_int = bbox.astype(np.int32)
         left_top = (bbox_int[0], bbox_int[1])
         right_bottom = (bbox_int[2], bbox_int[3])

@@ -3,16 +3,15 @@ import torch
 from pysot.core.config import cfg
 from pysot.models.model_builder import ModelBuilder
 from pysot.tracker.tracker_builder import build_tracker
-from detector.mmdet_detector import MMDETDetector
 from utils.bbox import xyxy2xywh, xywh2xyxy
-from utils.viz.image import imshow_det_bboxes
 import numpy as np
 
 __all__ = ['SiamSearcher']
 
 class SiamSearcher:
-    def __init__(self, config_file, checkpoint_file, device='cuda:0'):
+    def __init__(self, config_file, checkpoint_file, device='cuda:0', score_thr=0.0):
         self._model = self._init_model(config_file, checkpoint_file, device)
+        self.score_thr = score_thr
 
     def _init_model(self, config_file, checkpoint_file, device):
         cfg.merge_from_file(config_file)
@@ -29,14 +28,19 @@ class SiamSearcher:
 
     def search(self, img):
         outputs = self._model.track(img)
-        bbox = list(map(int, outputs['bbox']))
+        bbox = outputs['bbox']
         score = outputs['best_score']
-        bbox = np.array(bbox)[np.newaxis, :]
-        score = np.array([score])[np.newaxis, :]
-        return xywh2xyxy(bbox), score
+        if score > self.score_thr:
+            bbox = np.array(bbox)[np.newaxis, :]
+            score = np.array([score])[np.newaxis, :]
+            return xywh2xyxy(bbox), score
+        else:
+            return np.zeros((0, 4)), np.zeros((0, 1))
 
     def reset(self, img, bbox):
-        self._model.init(img, bbox)
+        bbox = bbox[np.newaxis, :]
+        bbox = self.bbox_to_siam(bbox)
+        self._model.init(img, bbox[0])
 
     @staticmethod
     def bbox_to_siam(bboxes, mode='mmdet'):
@@ -55,11 +59,13 @@ class SiamSearcher:
 
 
 if __name__ == '__main__':
+    from utils.viz.image import imshow_det_bboxes
+    from detector.mmdet_detector import MMDETDetector
     det_array = mmcv.imread('../demo/video/v_Surfing_g25_c02/frame000001.jpg')
     search_array = mmcv.imread('../demo/video/v_Surfing_g25_c02/frame000002.jpg')
     detector = MMDETDetector(config_file='../configs/detector/configs/hrnet/cascade_rcnn_hrnetv2p_w32_20e.py',
                              checkpoint_file='../configs/detector/checkpoints/hrnet/cascade_rcnn_hrnetv2p_w32_20e_20190522-55bec4ee.pth',
-                             score_thr=0.4,
+                             score_thr=0.3,
                              det_person=True)
     bboxes, scores, class_ids = detector(det_array)
     imshow_det_bboxes(
@@ -73,14 +79,13 @@ if __name__ == '__main__':
         wait_time=1,
         out_file='det.jpg')
     searcher = SiamSearcher(config_file='../configs/searcher/siamrpn_mobilev2_l234_dwxcorr/config.yaml',
-                            checkpoint_file='../configs/searcher/siamrpn_mobilev2_l234_dwxcorr/model.pth')
+                            checkpoint_file='../configs/searcher/siamrpn_mobilev2_l234_dwxcorr/model.pth',
+                            score_thr=0.0)
     if bboxes.shape[0] > 0:
-        bboxes_siam = searcher.bbox_to_siam(bboxes)
-        first_bbox = bboxes_siam[0]
-        first_class_id = class_ids[0:1]
+        first_bbox = bboxes[1]
+        first_class_id = class_ids[1:2]
         searcher.reset(det_array, first_bbox)
         first_search_bbox, first_search_score = searcher.search(search_array)
-        # print(first_search_bbox, first_search_score)
         imshow_det_bboxes(
             search_array,
             first_search_bbox,

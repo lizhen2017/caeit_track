@@ -8,7 +8,7 @@ __all__ = ['MMDETDetector']
 class MMDETDetector:
     def __init__(self, config_file,
                  checkpoint_file,
-                 device='cuda:0', score_thr=0.3, det_person=True):
+                 device='cuda:0', score_thr=0, det_person=True):
         self._model = self._init_model(config_file, checkpoint_file, device)
         self.CLASSES  = self._model.CLASSES
         self.score_thr = score_thr
@@ -40,6 +40,7 @@ class MMDETDetector:
         if self.score_thr > 0:
             inds = scores[:, 0] > self.score_thr
             bboxes = bboxes[inds, :]
+            scores = scores[inds, :]
             class_ids = class_ids[inds]
         return bboxes, scores, class_ids
 
@@ -49,11 +50,11 @@ class MMDETDetector:
         return bboxes, scores, class_ids
 
 if __name__ == '__main__':
-    img_path = '../demo/coco/000000000872.jpg'
+    img_path = '../demo/video/v_Surfing_g25_c02/frame000001.jpg'
     img_array = mmcv.imread(img_path)
     detector = MMDETDetector(config_file='../configs/detector/configs/hrnet/cascade_rcnn_hrnetv2p_w32_20e.py',
                              checkpoint_file='../configs/detector/checkpoints/hrnet/cascade_rcnn_hrnetv2p_w32_20e_20190522-55bec4ee.pth',
-                             score_thr=0.3,
+                             score_thr=0.4,
                              det_person=True)
     bboxes, scores, class_ids = detector(img_array)
     imshow_det_bboxes(
