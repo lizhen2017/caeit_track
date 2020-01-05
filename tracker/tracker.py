@@ -1,3 +1,5 @@
+from __future__ import division
+
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 from utils.bbox import box_iou
@@ -13,9 +15,14 @@ class Track(object):
         self.bbox = bbox
         self.searcher = None
 
-    def update(self, bbox=None, score=None):
-        self.bbox = bbox
-        self.score = score
+    def update(self, bbox=None, score=None, smooth=False):
+        if bbox is not None:
+            if smooth:
+                self.bbox = (self.bbox + bbox) / 2
+            else:
+                self.bbox = bbox
+        if score is not None:
+            self.score = score
 
 
 
@@ -38,11 +45,9 @@ class Tracker(object):
         self.track_id_counter += 1
         self.tracks.append(track)
 
-    def _update_one_track(self, track_id, score, bbox, class_id=None):
+    def _update_one_track(self, track_id, score, bbox):
         track = self.tracks[track_id]
-        # if class_id is not None:
-        #     track.class_id = class_id
-        track.update(bbox, score)
+        track.update(bbox, score, True)
 
     def _init_tracker(self, class_ids, scores, bboxes):
         for class_id, score, bbox in zip(class_ids, scores, bboxes):
@@ -106,24 +111,28 @@ class Tracker(object):
     def _deal_unassigned_track(self, track_id):
         return self._search(track_id)
 
+    def _track_search(self):
+        for idx in range(len(self.tracks)):
+            search_bbox, search_score = self._search(idx)
+            if search_score.shape[0] > 0:
+                self.tracks[idx].update(search_bbox[0], search_score[0])
+                self.tracks[idx].skipped_frames = 0
+            else:
+                self.tracks[idx].skipped_frames += self.skip_thr
+                self.tracks[idx].update(None, np.array([self.score_thr]))
+        tmp_tracks, _ = self._deal_skip_too_much()
+        self.tracks = tmp_tracks
+
     def track(self, cur_frame, cur_class_ids=None, cur_scores=None, cur_bboxes=None, search=True):
         self.cur_frame = cur_frame
         if search:
-            for idx in range(len(self.tracks)):
-                search_bbox, search_score = self._search(idx)
-                if search_score.shape[0] > 0:
-                    self.tracks[idx].update(search_bbox[0], search_score[0])
-                    self.tracks[idx].skipped_frames = 0
-                else:
-                    self.tracks[idx].skipped_frames += self.skip_thr
-                    self.tracks[idx].update(search_bbox, np.array([self.score_thr]))
-            tmp_tracks, _ = self._deal_skip_too_much()
-            self.tracks = tmp_tracks
+            self._track_search()
         else:
             if len(self.tracks) == 0:
                 self._init_tracker(cur_class_ids, cur_scores, cur_bboxes)
                 return cur_bboxes, cur_scores, cur_class_ids, [self.track_colors[track.track_id]
                                                                for track in self.tracks]
+            self._track_search()
             assignments, cost_mat = self._match_by_iou(cur_bboxes)
             assignments = self._postprocess_iou_matching(assignments, cost_mat)
             self._deal_unassigned_cur(cur_class_ids, cur_scores, cur_bboxes, assignments)
@@ -152,8 +161,8 @@ if __name__ == '__main__':
                              det_person=True)
     tracker = Tracker(searcher_config_file='../configs/searcher/siamrpn_mobilev2_l234_dwxcorr/config.yaml',
                       searcher_checkpoint_file='../configs/searcher/siamrpn_mobilev2_l234_dwxcorr/model.pth',
-                      score_thr=0.85)
-    det_fre = 4
+                      score_thr=0.6)
+    det_fre = 5
     # video_dir = '../demo/video/v_Surfing_g25_c02'
     # for i, img_name in enumerate(sorted(os.listdir(video_dir))):
     #     if not img_name.endswith('jpg'):
